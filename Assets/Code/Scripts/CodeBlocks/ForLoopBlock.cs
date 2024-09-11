@@ -39,8 +39,8 @@ public class ForLoopBlock : ContainerBlock
             return;
         }
 
-        int start = (int)startVariable.Value;
-        int end = (int)endVariable.Value;
+        int start = (int)startVariable.IntegerValue;
+        int end = (int)endVariable.IntegerValue;
 
         for (int i = start; i <= end; i++)
         {
