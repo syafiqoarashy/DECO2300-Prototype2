@@ -1,17 +1,13 @@
 using UnityEngine;
 using UnityEngine.XR.Interaction.Toolkit;
 
-public class ForLoopBlock : MonoBehaviour
+public class EndLoopBlock : MonoBehaviour
 {
     public XRSocketInteractor upperSocket;
     public XRSocketInteractor lowerSocket;
-    public XRSocketInteractor startVariableSocket;
-    public XRSocketInteractor endVariableSocket;
 
     public CodeBlock attachedUpperBlock;
     public CodeBlock attachedLowerBlock;
-    private VariableBlock startVariable;
-    private VariableBlock endVariable;
 
     private Renderer blockRenderer;
     private Material blockMaterial;
@@ -24,10 +20,6 @@ public class ForLoopBlock : MonoBehaviour
             upperSocket.selectEntered.AddListener(OnUpperSocketAttached);
         if (lowerSocket != null)
             lowerSocket.selectEntered.AddListener(OnLowerSocketAttached);
-        if (startVariableSocket != null)
-            startVariableSocket.selectEntered.AddListener(OnStartVariableAttached);
-        if (endVariableSocket != null)
-            endVariableSocket.selectEntered.AddListener(OnEndVariableAttached);
 
         blockRenderer = GetComponent<Renderer>();
         if (blockRenderer != null)
@@ -52,24 +44,6 @@ public class ForLoopBlock : MonoBehaviour
         if (attachedBlock != null)
         {
             attachedLowerBlock = attachedBlock;
-        }
-    }
-
-    private void OnStartVariableAttached(SelectEnterEventArgs args)
-    {
-        VariableBlock variableBlock = args.interactableObject.transform.GetComponent<VariableBlock>();
-        if (variableBlock != null)
-        {
-            startVariable = variableBlock;
-        }
-    }
-
-    private void OnEndVariableAttached(SelectEnterEventArgs args)
-    {
-        VariableBlock variableBlock = args.interactableObject.transform.GetComponent<VariableBlock>();
-        if (variableBlock != null)
-        {
-            endVariable = variableBlock;
         }
     }
 
@@ -110,16 +84,6 @@ public class ForLoopBlock : MonoBehaviour
 
     public string AnalyzeCode()
     {
-        return $"For i = {startVariable?.GetValue()} to {endVariable?.GetValue()}";
-    }
-
-    public int GetStartValue()
-    {
-        return startVariable != null ? startVariable.IntegerValue : 0;
-    }
-
-    public int GetEndValue()
-    {
-        return endVariable != null ? endVariable.IntegerValue : 0;
+        return "End Loop";
     }
 }

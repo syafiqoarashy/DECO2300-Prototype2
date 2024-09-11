@@ -1,5 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
+using TMPro;
+using System.Collections;
 
 public class CodeExecutor : MonoBehaviour
 {
@@ -7,6 +9,8 @@ public class CodeExecutor : MonoBehaviour
     public Transform gridGoal;
     public float moveDistance = 0.25f;
     public LayerMask gridPathLayer;
+    public TMP_Text errorMessage;
+    public GameObject errorCanvas;
 
     private MethodBlock currentBlock;
     private int currentStep = 0;
@@ -16,6 +20,7 @@ public class CodeExecutor : MonoBehaviour
     private void Start()
     {
         originalPlayerPosition = player.position;
+        errorCanvas.SetActive(false);
     }
 
     public void SetCodeBlock(MethodBlock block)
@@ -49,13 +54,13 @@ public class CodeExecutor : MonoBehaviour
 
         if (!executed)
         {
-            blockToExecute.MarkAsFailed(); 
+            blockToExecute.MarkAsFailed();
             Debug.Log("Execution failed.");
-            ResetPlayer(); 
+            ResetPlayer();
             return;
         }
 
-        blockToExecute.SetBlockColor(Color.green); 
+        blockToExecute.SetBlockColor(Color.green);
         currentStep++;
         ColorCodeBlocks();
     }
@@ -81,7 +86,7 @@ public class CodeExecutor : MonoBehaviour
     {
         if (block.attachedVariableBlock == null)
         {
-            Debug.Log($"Execution failed: {block.Type} is missing a variable block.");
+            DisplayError($"Execution failed: {block.Type} is missing a variable block.");
             return false;
         }
 
@@ -114,7 +119,7 @@ public class CodeExecutor : MonoBehaviour
         }
         else
         {
-            Debug.Log($"Execution failed: Moving {block.Type} {steps} step(s) would place the player outside the GridPath.");
+            DisplayError($"Execution failed: Moving {block.Type} {steps} step(s) would place the player outside the GridPath.");
             return false;
         }
     }
@@ -152,16 +157,13 @@ public class CodeExecutor : MonoBehaviour
     private bool IsOnGridPath(Vector3 position)
     {
         float rayLength = 1.0f;
-
         Vector3 rayOrigin = position + Vector3.up * 0.5f;
-
         RaycastHit hit;
         if (Physics.Raycast(rayOrigin, Vector3.down, out hit, rayLength, gridPathLayer))
         {
             Debug.Log($"Ray hit: {hit.collider.gameObject.name} at {hit.point}");
             return true;
         }
-
         Debug.Log("Raycast did not hit a valid GridPath.");
         return false;
     }
@@ -173,6 +175,7 @@ public class CodeExecutor : MonoBehaviour
             Debug.Log("Goal Reached!");
         }
     }
+
     private void ColorCodeBlocks()
     {
         for (int i = 0; i < executionOrder.Count; i++)
@@ -183,7 +186,7 @@ public class CodeExecutor : MonoBehaviour
             }
             else if (i == currentStep)
             {
-                executionOrder[i].SetBlockColor(Color.blue); 
+                executionOrder[i].SetBlockColor(Color.blue);
             }
         }
     }
@@ -193,5 +196,27 @@ public class CodeExecutor : MonoBehaviour
         player.position = originalPlayerPosition;
         currentStep = 0;
         ColorCodeBlocks();
+    }
+
+    private void DisplayError(string message)
+    {
+        if (errorMessage != null)
+        {
+            errorMessage.text = message;
+        }
+        if (errorCanvas != null)
+        {
+            errorCanvas.SetActive(true);
+            StartCoroutine(HideErrorCanvas());
+        }
+    }
+
+    private IEnumerator HideErrorCanvas()
+    {
+        yield return new WaitForSeconds(3f);
+        if (errorCanvas != null)
+        {
+            errorCanvas.SetActive(false);
+        }
     }
 }
