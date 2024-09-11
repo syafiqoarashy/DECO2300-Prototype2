@@ -1,5 +1,5 @@
 using UnityEngine;
-
+using TMPro;
 public class VariableBlock : CodeBlock
 {
     public enum VariableType { Integer, Boolean }
@@ -7,6 +7,13 @@ public class VariableBlock : CodeBlock
 
     public int IntegerValue;
     public bool BooleanValue;
+
+    public TMP_Text variableValueText;
+
+    private void Start()
+    {
+        UpdateVariableText();
+    }
 
     public object GetValue()
     {
@@ -43,10 +50,19 @@ public class VariableBlock : CodeBlock
                 }
                 break;
         }
+        UpdateVariableText();
     }
 
     public override void Execute()
     {
         Debug.Log($"Variable of type {Type} with value: {GetValue()}");
+    }
+
+    private void UpdateVariableText()
+    {
+        if (variableValueText != null)
+        {
+            variableValueText.text = GetValue().ToString();
+        }
     }
 }
