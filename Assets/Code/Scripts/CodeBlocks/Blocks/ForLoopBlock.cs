@@ -1,22 +1,27 @@
 using UnityEngine;
 using UnityEngine.XR.Interaction.Toolkit;
 
-public class ForLoopBlock : MonoBehaviour
+public class ForLoopBlock : ContainerBlock
 {
     public XRSocketInteractor upperSocket;
     public XRSocketInteractor lowerSocket;
     public XRSocketInteractor startVariableSocket;
     public XRSocketInteractor endVariableSocket;
 
-    public CodeBlock attachedUpperBlock;
-    public CodeBlock attachedLowerBlock;
-    private VariableBlock startVariable;
-    private VariableBlock endVariable;
+    public VariableBlock startVariable;
+    public VariableBlock endVariable;
+
+    public MethodBlock attachedUpperBlock;
+    public MethodBlock attachedLowerBlock;
+    public ForLoopBlock attachedUpperForBlock;
+    public ForLoopBlock attachedLowerForBlock;
 
     private Renderer blockRenderer;
     private Material blockMaterial;
     private Color originalColor;
     private bool isFailed = false;
+
+    public bool IsEndLoopBlock = false;
 
     private void Start()
     {
@@ -42,7 +47,16 @@ public class ForLoopBlock : MonoBehaviour
         CodeBlock attachedBlock = args.interactableObject.transform.GetComponent<CodeBlock>();
         if (attachedBlock != null)
         {
-            attachedUpperBlock = attachedBlock;
+            if (attachedBlock is MethodBlock methodBlock)
+            {
+                attachedUpperBlock = methodBlock;
+                methodBlock.attachedLowerForBlock = this;
+            }
+            else if (attachedBlock is ForLoopBlock forLoopBlock)
+            {
+                attachedUpperForBlock = forLoopBlock;
+                forLoopBlock.attachedLowerForBlock = this;
+            }
         }
     }
 
@@ -51,7 +65,16 @@ public class ForLoopBlock : MonoBehaviour
         CodeBlock attachedBlock = args.interactableObject.transform.GetComponent<CodeBlock>();
         if (attachedBlock != null)
         {
-            attachedLowerBlock = attachedBlock;
+            if (attachedBlock is MethodBlock methodBlock)
+            {
+                attachedLowerBlock = methodBlock;
+                methodBlock.attachedUpperForBlock = this;
+            }
+            else if (attachedBlock is ForLoopBlock forLoopBlock)
+            {
+                attachedLowerForBlock = forLoopBlock;
+                forLoopBlock.attachedUpperForBlock = this;
+            }
         }
     }
 
@@ -73,9 +96,8 @@ public class ForLoopBlock : MonoBehaviour
         }
     }
 
-    public void Execute()
+    public override void Execute()
     {
-        // Execution logic will be handled by CodeExecutor
     }
 
     public void SetBlockColor(Color color)
@@ -106,11 +128,6 @@ public class ForLoopBlock : MonoBehaviour
     public void ClearFailureState()
     {
         isFailed = false;
-    }
-
-    public string AnalyzeCode()
-    {
-        return $"For i = {startVariable?.GetValue()} to {endVariable?.GetValue()}";
     }
 
     public int GetStartValue()

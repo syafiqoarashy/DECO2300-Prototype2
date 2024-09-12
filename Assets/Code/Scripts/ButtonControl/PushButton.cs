@@ -45,7 +45,7 @@ public class PushButton : MonoBehaviour
 
     private System.Collections.IEnumerator AnimateButton()
     {
-        Vector3 pushedPosition = originalPosition - Vector3.forward * pushDistance;
+        Vector3 pushedPosition = originalPosition - Vector3.up * pushDistance;
         float elapsedTime = 0f;
 
         while (elapsedTime < pushDuration)

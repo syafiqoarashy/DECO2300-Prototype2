@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.XR.Interaction.Toolkit;
 using TMPro;
 
-public class MethodBlock : MonoBehaviour
+public class MethodBlock : ContainerBlock
 {
     public enum MethodType { MoveRight, MoveUp, MoveDown, MoveLeft }
     public MethodType Type;
@@ -11,6 +11,8 @@ public class MethodBlock : MonoBehaviour
     public XRSocketInteractor variableSocket;
     public MethodBlock attachedUpperBlock;
     public MethodBlock attachedLowerBlock;
+    public ForLoopBlock attachedUpperForBlock;
+    public ForLoopBlock attachedLowerForBlock;
     public VariableBlock attachedVariableBlock;
 
     public TMP_Text methodTypeText;
@@ -75,21 +77,37 @@ public class MethodBlock : MonoBehaviour
 
     private void OnUpperSocketAttached(SelectEnterEventArgs args)
     {
-        MethodBlock attachedBlock = args.interactableObject.transform.GetComponent<MethodBlock>();
+        CodeBlock attachedBlock = args.interactableObject.transform.GetComponent<CodeBlock>();
         if (attachedBlock != null)
         {
-            attachedUpperBlock = attachedBlock;
-            attachedBlock.attachedLowerBlock = this;
+            if (attachedBlock is MethodBlock methodBlock)
+            {
+                attachedUpperBlock = methodBlock;
+                methodBlock.attachedLowerBlock = this;
+            }
+            else if (attachedBlock is ForLoopBlock forLoopBlock)
+            {
+                attachedUpperForBlock = forLoopBlock;
+                forLoopBlock.attachedLowerBlock = this;
+            }
         }
     }
 
     private void OnLowerSocketAttached(SelectEnterEventArgs args)
     {
-        MethodBlock attachedBlock = args.interactableObject.transform.GetComponent<MethodBlock>();
+        CodeBlock attachedBlock = args.interactableObject.transform.GetComponent<CodeBlock>();
         if (attachedBlock != null)
         {
-            attachedLowerBlock = attachedBlock;
-            attachedBlock.attachedUpperBlock = this;
+            if (attachedBlock is MethodBlock methodBlock)
+            {
+                attachedLowerBlock = methodBlock;
+                methodBlock.attachedUpperBlock = this;
+            }
+            else if (attachedBlock is ForLoopBlock forLoopBlock)
+            {
+                attachedLowerForBlock = forLoopBlock;
+                forLoopBlock.attachedUpperBlock = this;
+            }
         }
     }
 
@@ -104,28 +122,51 @@ public class MethodBlock : MonoBehaviour
 
     public void OnUpperSocketDetached(SelectExitEventArgs args)
     {
-        if (args.interactableObject.transform.GetComponent<MethodBlock>() == attachedUpperBlock)
+        CodeBlock detachedBlock = args.interactableObject.transform.GetComponent<CodeBlock>();
+        if (detachedBlock != null)
         {
-            attachedUpperBlock.attachedLowerBlock = null;
-            attachedUpperBlock = null;
+            if (detachedBlock is MethodBlock methodBlock && methodBlock == attachedUpperBlock)
+            {
+                attachedUpperBlock.attachedLowerBlock = null;
+                attachedUpperBlock = null;
+            }
+            else if (detachedBlock is ForLoopBlock forLoopBlock && forLoopBlock == attachedUpperForBlock)
+            {
+                attachedUpperForBlock.attachedLowerForBlock = null;
+                attachedUpperForBlock = null;
+            }
         }
     }
 
     public void OnLowerSocketDetached(SelectExitEventArgs args)
     {
-        if (args.interactableObject.transform.GetComponent<MethodBlock>() == attachedLowerBlock)
+        CodeBlock detachedBlock = args.interactableObject.transform.GetComponent<CodeBlock>();
+        if (detachedBlock != null)
         {
-            attachedLowerBlock.attachedUpperBlock = null;
-            attachedLowerBlock = null;
+            if (detachedBlock is MethodBlock methodBlock && methodBlock == attachedLowerBlock)
+            {
+                attachedLowerBlock.attachedUpperBlock = null;
+                attachedLowerBlock = null;
+            }
+            else if (detachedBlock is ForLoopBlock forLoopBlock && forLoopBlock == attachedLowerForBlock)
+            {
+                attachedLowerForBlock.attachedUpperForBlock = null;
+                attachedLowerForBlock = null;
+            }
         }
     }
 
     public void OnVariableDetached(SelectExitEventArgs args)
     {
-        if (args.interactableObject.transform.GetComponent<VariableBlock>() == attachedVariableBlock)
+        VariableBlock detachedBlock = args.interactableObject.transform.GetComponent<VariableBlock>();
+        if (detachedBlock != null && detachedBlock == attachedVariableBlock)
         {
             attachedVariableBlock = null;
         }
+    }
+
+    public override void Execute()
+    {
     }
 
     public void SetBlockColor(Color color)
@@ -156,24 +197,6 @@ public class MethodBlock : MonoBehaviour
     public void ClearFailureState()
     {
         isFailed = false;
-    }
-
-    public string AnalyzeCode()
-    {
-        string code = $"{Type}";
-        if (attachedVariableBlock != null)
-        {
-            code += $"({attachedVariableBlock.GetValue()})";
-        }
-        else
-        {
-            code += "()";
-        }
-        if (attachedLowerBlock != null)
-        {
-            code += "\n" + attachedLowerBlock.AnalyzeCode();
-        }
-        return code;
     }
 
     public void SetMethodType(MethodType newType)

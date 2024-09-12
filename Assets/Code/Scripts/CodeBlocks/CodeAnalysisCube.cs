@@ -6,20 +6,57 @@ public class CodeAnalysisCube : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
-        MethodBlock newBlock = other.GetComponent<MethodBlock>();
+        CodeBlock newBlock = other.GetComponent<CodeBlock>();
         if (newBlock != null && codeExecutor != null)
         {
-            codeExecutor.SetCodeBlock(newBlock.GetAbsoluteTopmostBlock());
+            codeExecutor.SetCodeBlock(GetTopmostBlock(newBlock));
         }
     }
 
     private void OnTriggerExit(Collider other)
     {
-        if (other.GetComponent<MethodBlock>() != null)
+        CodeBlock exitingBlock = other.GetComponent<CodeBlock>();
+        if (exitingBlock != null)
         {
             ResetAllMethodBlockColors();
             Debug.Log("Code block group exited. All block colors reset.");
         }
+    }
+
+    private CodeBlock GetTopmostBlock(CodeBlock block)
+    {
+        CodeBlock topBlock = block;
+
+        while (true)
+        {
+            CodeBlock nextBlock = null;
+
+            if (topBlock is MethodBlock methodBlock)
+            {
+                nextBlock = methodBlock.attachedUpperBlock;
+                if (methodBlock.attachedUpperForBlock != null)
+                {
+                    nextBlock = methodBlock.attachedUpperForBlock;
+                }
+            }
+            else if (topBlock is ForLoopBlock forLoopBlock)
+            {
+                nextBlock = forLoopBlock.attachedUpperForBlock;
+                if (forLoopBlock.attachedUpperBlock != null)
+                {
+                    nextBlock = forLoopBlock.attachedUpperBlock;
+                }
+            }
+
+            if (nextBlock == null)
+            {
+                break;
+            }
+
+            topBlock = nextBlock;
+        }
+
+        return topBlock;
     }
 
     private void ResetAllMethodBlockColors()

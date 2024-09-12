@@ -12,10 +12,13 @@ public class CodeExecutor : MonoBehaviour
     public TMP_Text errorMessage;
     public GameObject errorCanvas;
 
-    private MethodBlock currentBlock;
+    private MethodBlock currentMethodBlock;
+    private ForLoopBlock currentForLoopBlock;
     private int currentStep = 0;
-    private List<MethodBlock> executionOrder = new List<MethodBlock>();
+    private List<CodeBlock> executionOrder = new List<CodeBlock>();
     private Vector3 originalPlayerPosition;
+    private Dictionary<ForLoopBlock, int> loopIterationCounts = new Dictionary<ForLoopBlock, int>();
+    private bool isAtEndOfLoop = false;
 
     private void Start()
     {
@@ -23,21 +26,63 @@ public class CodeExecutor : MonoBehaviour
         errorCanvas.SetActive(false);
     }
 
-    public void SetCodeBlock(MethodBlock block)
+    public void SetCodeBlock(CodeBlock block)
     {
         ResetPlayer();
-        currentBlock = block?.GetAbsoluteTopmostBlock();
         currentStep = 0;
         executionOrder.Clear();
-        if (currentBlock != null)
+        loopIterationCounts.Clear();
+        isAtEndOfLoop = false;
+
+        if (block == null) return;
+
+        FlattenCodeStructure(block);
+
+        LogExecutionOrder();
+        ColorCodeBlocks();
+    }
+
+    private void FlattenCodeStructure(CodeBlock block)
+    {
+        Stack<CodeBlock> stack = new Stack<CodeBlock>();
+        stack.Push(block);
+
+        while (stack.Count > 0)
         {
-            MethodBlock temp = currentBlock;
-            while (temp != null)
+            CodeBlock currentBlock = stack.Pop();
+
+            if (currentBlock != null)
             {
-                executionOrder.Add(temp);
-                temp = temp.attachedLowerBlock;
+                executionOrder.Add(currentBlock);
+
+                if (currentBlock is ForLoopBlock forLoopBlock)
+                {
+                    if (forLoopBlock.IsEndLoopBlock)
+                    {
+                        continue;
+                    }
+
+                    MethodBlock child = forLoopBlock.attachedLowerBlock;
+                    while (child != null)
+                    {
+                        stack.Push(child);
+                        child = child.attachedLowerBlock;
+                    }
+
+                    loopIterationCounts[forLoopBlock] = (forLoopBlock.GetEndValue()-1) - forLoopBlock.GetStartValue();
+                }
+                else if (currentBlock is MethodBlock methodBlock)
+                {
+                    if (methodBlock.attachedLowerBlock != null)
+                    {
+                        stack.Push(methodBlock.attachedLowerBlock);
+                    }
+                    if (methodBlock.attachedLowerForBlock != null)
+                    {
+                        stack.Push(methodBlock.attachedLowerForBlock);
+                    }
+                }
             }
-            ColorCodeBlocks();
         }
     }
 
@@ -49,18 +94,32 @@ public class CodeExecutor : MonoBehaviour
             return;
         }
 
-        MethodBlock blockToExecute = executionOrder[currentStep];
+        if (isAtEndOfLoop)
+        {
+            isAtEndOfLoop = false;
+            currentStep++;
+            ColorCodeBlocks();
+            return;
+        }
+
+        CodeBlock blockToExecute = executionOrder[currentStep];
         bool executed = ExecuteBlock(blockToExecute);
 
         if (!executed)
         {
-            blockToExecute.MarkAsFailed();
+            if (blockToExecute is MethodBlock methodBlock)
+            {
+                methodBlock.MarkAsFailed();
+            }
             Debug.Log("Execution failed.");
             ResetPlayer();
             return;
         }
 
-        blockToExecute.SetBlockColor(Color.green);
+        if (blockToExecute is MethodBlock methodBlockToColor)
+        {
+            methodBlockToColor.SetBlockColor(Color.green);
+        }
         currentStep++;
         ColorCodeBlocks();
     }
@@ -74,84 +133,149 @@ public class CodeExecutor : MonoBehaviour
         }
 
         currentStep--;
-        MethodBlock blockToExecute = executionOrder[currentStep];
+        CodeBlock blockToExecute = executionOrder[currentStep];
 
         UndoBlockExecution(blockToExecute);
-        blockToExecute.ResetBlockColor();
+        if (blockToExecute is MethodBlock methodBlockToReset)
+        {
+            methodBlockToReset.ResetBlockColor();
+        }
 
         ColorCodeBlocks();
     }
 
-    private bool ExecuteBlock(MethodBlock block)
+    private bool ExecuteBlock(CodeBlock block)
     {
-        if (block.attachedVariableBlock == null)
+        if (block is MethodBlock methodBlock)
         {
-            DisplayError($"Execution failed: {block.Type} is missing a variable block.");
-            return false;
+            if (methodBlock.attachedVariableBlock == null)
+            {
+                DisplayError($"Execution failed: {methodBlock.Type} is missing a variable block.");
+                return false;
+            }
+
+            Vector3 movement = Vector3.zero;
+            switch (methodBlock.Type)
+            {
+                case MethodBlock.MethodType.MoveRight:
+                    movement = Vector3.right;
+                    break;
+                case MethodBlock.MethodType.MoveLeft:
+                    movement = Vector3.left;
+                    break;
+                case MethodBlock.MethodType.MoveUp:
+                    movement = Vector3.forward;
+                    break;
+                case MethodBlock.MethodType.MoveDown:
+                    movement = Vector3.back;
+                    break;
+            }
+
+            int steps = methodBlock.attachedVariableBlock.IntegerValue;
+            Vector3 newPosition = player.position + movement * moveDistance * steps;
+
+            if (IsOnGridPath(newPosition))
+            {
+                player.position = newPosition;
+                Debug.Log($"Executed: {methodBlock.Type} {steps} step(s)");
+                return true;
+            }
+            else
+            {
+                DisplayError($"Execution failed: Moving {methodBlock.Type} {steps} step(s) would place the player outside the GridPath.");
+                return false;
+            }
+        }
+        else if (block is ForLoopBlock forLoopBlock)
+        {
+            if (forLoopBlock.IsEndLoopBlock)
+            {
+                HandleEndLoopBlock(forLoopBlock);
+                return true;
+            }
+            else
+            {
+                ProcessForLoopBlock(forLoopBlock);
+                return true;
+            }
         }
 
-        Vector3 movement = Vector3.zero;
-        switch (block.Type)
-        {
-            case MethodBlock.MethodType.MoveRight:
-                movement = Vector3.right;
-                break;
-            case MethodBlock.MethodType.MoveLeft:
-                movement = Vector3.left;
-                break;
-            case MethodBlock.MethodType.MoveUp:
-                movement = Vector3.forward;
-                break;
-            case MethodBlock.MethodType.MoveDown:
-                movement = Vector3.back;
-                break;
-        }
-
-        int steps = block.attachedVariableBlock.IntegerValue;
-        Vector3 newPosition = player.position + movement * moveDistance * steps;
-
-        if (IsOnGridPath(newPosition))
-        {
-            player.position = newPosition;
-            Debug.Log($"Executed: {block.Type} {steps} step(s)");
-            CheckGoal();
-            return true;
-        }
-        else
-        {
-            DisplayError($"Execution failed: Moving {block.Type} {steps} step(s) would place the player outside the GridPath.");
-            return false;
-        }
+        return false;
     }
 
-    private void UndoBlockExecution(MethodBlock block)
+    private void HandleEndLoopBlock(ForLoopBlock endLoopBlock)
     {
-        if (block.attachedVariableBlock == null)
+        Debug.Log("End of loop reached.");
+        isAtEndOfLoop = true;
+    }
+
+    private void ProcessForLoopBlock(ForLoopBlock forLoopBlock)
+    {
+        if (forLoopBlock.startVariable == null || forLoopBlock.endVariable == null)
         {
-            Debug.Log($"Cannot undo: {block.Type} is missing a variable block.");
+            DisplayError("ForLoopBlock is missing start or end variable.");
+            Debug.LogError("ForLoopBlock is missing start or end variable.");
             return;
         }
 
-        Vector3 movement = Vector3.zero;
-        switch (block.Type)
+        int start = forLoopBlock.GetStartValue();
+        int end = forLoopBlock.GetEndValue();
+
+        List<MethodBlock> blocksToExecute = new List<MethodBlock>();
+        MethodBlock child = forLoopBlock.attachedLowerBlock;
+
+        while (child != null)
         {
-            case MethodBlock.MethodType.MoveRight:
-                movement = Vector3.left;
-                break;
-            case MethodBlock.MethodType.MoveLeft:
-                movement = Vector3.right;
-                break;
-            case MethodBlock.MethodType.MoveUp:
-                movement = Vector3.back;
-                break;
-            case MethodBlock.MethodType.MoveDown:
-                movement = Vector3.forward;
-                break;
+            blocksToExecute.Add(child);
+            child = child.attachedLowerBlock;
         }
 
-        int steps = block.attachedVariableBlock.IntegerValue;
-        player.position += movement * moveDistance * steps;
-        Debug.Log($"Undid: {block.Type} {steps} step(s)");
+        for (int i = start; i < end; i++)
+        {
+            foreach (var block in blocksToExecute)
+            {
+                if (block is MethodBlock methodBlock)
+                {
+                    executionOrder.Add(methodBlock);
+                }
+            }
+        }
+
+        LogExecutionOrder();
+        ColorCodeBlocks();
+    }
+
+    private void UndoBlockExecution(CodeBlock block)
+    {
+        if (block is MethodBlock methodBlock)
+        {
+            if (methodBlock.attachedVariableBlock == null)
+            {
+                Debug.Log($"Cannot undo: {methodBlock.Type} is missing a variable block.");
+                return;
+            }
+
+            Vector3 movement = Vector3.zero;
+            switch (methodBlock.Type)
+            {
+                case MethodBlock.MethodType.MoveRight:
+                    movement = Vector3.left;
+                    break;
+                case MethodBlock.MethodType.MoveLeft:
+                    movement = Vector3.right;
+                    break;
+                case MethodBlock.MethodType.MoveUp:
+                    movement = Vector3.back;
+                    break;
+                case MethodBlock.MethodType.MoveDown:
+                    movement = Vector3.forward;
+                    break;
+            }
+
+            int steps = methodBlock.attachedVariableBlock.IntegerValue;
+            player.position += movement * moveDistance * steps;
+            Debug.Log($"Undid: {methodBlock.Type} {steps} step(s)");
+        }
     }
 
     private bool IsOnGridPath(Vector3 position)
@@ -162,18 +286,15 @@ public class CodeExecutor : MonoBehaviour
         if (Physics.Raycast(rayOrigin, Vector3.down, out hit, rayLength, gridPathLayer))
         {
             Debug.Log($"Ray hit: {hit.collider.gameObject.name} at {hit.point}");
+            if (hit.collider.gameObject.name == "GridGoal")
+            {
+                DisplayError("Goal reached, congratulations!");
+                Debug.Log("Goal Reached!");
+            }
             return true;
         }
         Debug.Log("Raycast did not hit a valid GridPath.");
         return false;
-    }
-
-    private void CheckGoal()
-    {
-        if (Vector3.Distance(player.position, gridGoal.position) < 0.1f)
-        {
-            Debug.Log("Goal Reached!");
-        }
     }
 
     private void ColorCodeBlocks()
@@ -182,11 +303,33 @@ public class CodeExecutor : MonoBehaviour
         {
             if (i < currentStep)
             {
-                executionOrder[i].SetBlockColor(Color.green);
+                if (executionOrder[i] is MethodBlock methodBlock)
+                {
+                    methodBlock.SetBlockColor(Color.green);
+                }
             }
             else if (i == currentStep)
             {
-                executionOrder[i].SetBlockColor(Color.blue);
+                if (executionOrder[i] is MethodBlock methodBlock)
+                {
+                    methodBlock.SetBlockColor(Color.blue);
+                }
+            }
+        }
+    }
+
+    private void LogExecutionOrder()
+    {
+        Debug.Log("Execution Order:");
+        foreach (var block in executionOrder)
+        {
+            if (block is MethodBlock methodBlock)
+            {
+                Debug.Log($"MethodBlock - Type: {methodBlock.Type}, Variable: {methodBlock.attachedVariableBlock?.IntegerValue}");
+            }
+            else if (block is ForLoopBlock forLoopBlock)
+            {
+                Debug.Log($"ForLoopBlock - Start: {forLoopBlock.GetStartValue()}, End: {forLoopBlock.GetEndValue()}");
             }
         }
     }
